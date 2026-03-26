@@ -7,55 +7,86 @@ Projeto da matéria de IOT, criando um sistema que detecta se o Wi-Fi está liga
 Siga o código que utilizei para fazer o sistema funcionar
 
 ```
-const int PINO_TRIG = 33;
-const int PINO_ECHO = 32;
-const int PINO_LED_INTRUSO = 25;
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
-float obter_distancia();
+// Credenciais da rede industrial 
+const char* ssid = "A54 de Julio";
+const char* password = "Julio12345678";
 
-void setup() {
+// Configuração dos pinos
+const int PINO_LED_VERDE = 18;
+const int PINO_LED_VERMELHO = 19;
 
+const char* serverName = "https://jsonplaceholder.typicode.com/todos/1";
+
+void setup(){
   Serial.begin(115200);
-  pinMode(PINO_TRIG, OUTPUT);
-  pinMode(PINO_ECHO, INPUT);
-  pinMode(PINO_LED_INTRUSO, OUTPUT);
-  digitalWrite(PINO_TRIG, LOW);
 
-}
+  pinMode(PINO_LED_VERDE, OUTPUT);
+  pinMode(PINO_LED_VERMELHO, OUTPUT);
 
-void loop() {
+  // Inicia conexão como Station
+  WiFi.begin(ssid, password);
+  Serial.print("Conectando a: ");
+  Serial.println(ssid);
 
-  float dist = obter_distancia();
-
-  Serial.print("Distância :");
-  Serial.print(dist);
-  Serial.println(" cm");
-
-  if(dist > 0 && dist <= 10){
-    Serial.println("Intruso detectado!");
-    digitalWrite(PINO_LED_INTRUSO, HIGH);
+  while(WiFi.status() != WL_CONNECTED){
     delay(500);
-  }else{
-    Serial.println("Ambiente seguro");
-    digitalWrite(PINO_LED_INTRUSO, LOW);
+    Serial.print(".");
   }
-  delay(500);
+  Serial.println("\nConectado com sucesso!");
 }
 
-float obter_distancia(){
+void loop(){
+  // Verifica conexão a cada 10 segundos
+  if(WiFi.status() == WL_CONNECTED){
+    // Criamos o obejto cliente seguro
+    WiFiClientSecure *client = new WiFiClientSecure;
 
-  digitalWrite(PINO_TRIG, LOW);
-  delayMicroseconds(2);
-  digitalWrite(PINO_TRIG, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(PINO_TRIG, LOW);
-  long duracao = pulseIn(PINO_ECHO, HIGH, 30000);
-  float distancia = (duracao/2.0) * 0.0343;
-  
-  return distancia;
+    if(client){
+      client ->setInsecure();
 
+      HTTPClient https;
+
+      Serial.print("[HTTPS] Iniciando requisição...\n");
+
+      if(https.begin(*client, serverName)) {
+        // Realiza o GET
+        int httpCode = https.GET();
+
+        // httpCode será positivo se o servidor responder 
+        if(httpCode > 0){
+          Serial.printf("[HTTPS] Código de resposta: %d\n", httpCode);
+
+          if(httpCode == HTTP_CODE_OK){
+            String payload = https.getString();
+            Serial.println("Conteúdo recebido:");
+            Serial.println(payload);
+            digitalWrite(PINO_LED_VERDE, HIGH);
+            digitalWrite(PINO_LED_VERMELHO, LOW);
+            
+          }
+        }else{
+          Serial.printf("[HTTPS] Falha na requisição, erro: %s\n", https.errorToString(httpCode).c_str());
+        }
+
+        https.end();
+      } else{
+        Serial.printf("[HTTPS] Não foi possível conectar ao servidor\n");
+      }
+      delete client;
+    }
+  }else{
+    Serial.println("Reconectando...");
+    WiFi.reconnect();
+    digitalWrite(PINO_LED_VERDE, LOW);
+    digitalWrite(PINO_LED_VERMELHO, HIGH);
+  }
+
+  delay(15000);
 }
-
 ```
 
 ## Demonstração em Vídeo
